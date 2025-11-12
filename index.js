@@ -28,7 +28,7 @@ async function run() {
     const watchlistCollection = db.collection("watchlist");
 
     app.get("/", (req, res) => {
-      res.send("Movie Matrix Server is Running!");
+      res.send("🎬 MovieMaster Pro Server is Running!");
     });
 
     app.get("/movies", async (req, res) => {
@@ -50,6 +50,20 @@ async function run() {
       const newMovie = req.body;
       const result = await moviesCollection.insertOne(newMovie);
       res.send(result);
+    });
+
+    app.put("/movies/:id", async (req, res) => {
+      const id = req.params.id;
+      const updated = req.body;
+      try {
+        const result = await moviesCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updated }
+        );
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Error updating movie", error: err });
+      }
     });
 
     app.delete("/movies/:id", async (req, res) => {
@@ -84,21 +98,31 @@ async function run() {
       }
     });
 
+    app.get("/movies/user/:email", async (req, res) => {
+      const result = await moviesCollection
+        .find({ addedBy: req.params.email })
+        .toArray();
+      res.send(result);
+    });
+
     app.post("/watchlist", async (req, res) => {
       const { userEmail, movieId } = req.body;
       const existing = await watchlistCollection.findOne({ userEmail, movieId });
-      if (existing) return res.status(400).send({ message: "Already in watchlist" });
+      if (existing)
+        return res.status(400).send({ message: "Already in watchlist" });
 
       const movie = await moviesCollection.findOne({ _id: new ObjectId(movieId) });
       if (!movie) return res.status(404).send({ message: "Movie not found" });
 
-      const watchItem = { ...movie, userEmail, addedAt: new Date() };
+      const watchItem = { ...movie, movieId, userEmail, addedAt: new Date() };
       const result = await watchlistCollection.insertOne(watchItem);
       res.send(result);
     });
 
     app.get("/watchlist/:email", async (req, res) => {
-      const result = await watchlistCollection.find({ userEmail: req.params.email }).toArray();
+      const result = await watchlistCollection
+        .find({ userEmail: req.params.email })
+        .toArray();
       res.send(result);
     });
 
@@ -112,7 +136,7 @@ async function run() {
     });
 
     app.listen(port, () => {
-      console.log(`🚀 Server running on port ${port}`);
+      console.log(`🚀 MovieMaster Pro Server running on port ${port}`);
     });
   } catch (error) {
     console.error("❌ MongoDB connection failed:", error);

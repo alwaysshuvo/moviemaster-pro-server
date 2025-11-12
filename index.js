@@ -76,13 +76,18 @@ async function run() {
     app.put("/movies/:id", async (req, res) => {
       const { id } = req.params;
       const updated = req.body;
+
       try {
+        if (updated && Object.prototype.hasOwnProperty.call(updated, "_id")) {
+          delete updated._id;
+        }
         let result;
         if (ObjectId.isValid(id)) {
           result = await moviesCollection.updateOne(
             { _id: new ObjectId(id) },
             { $set: updated }
           );
+          console.log(result);
         }
         if (!result || result.matchedCount === 0) {
           result = await moviesCollection.updateOne(
@@ -163,12 +168,17 @@ async function run() {
     app.post("/watchlist", async (req, res) => {
       try {
         const { userEmail, movieId } = req.body;
-        const existing = await watchlistCollection.findOne({ userEmail, movieId });
+        const existing = await watchlistCollection.findOne({
+          userEmail,
+          movieId,
+        });
         if (existing)
           return res.status(400).send({ message: "Already in watchlist" });
         let movie;
         if (ObjectId.isValid(movieId)) {
-          movie = await moviesCollection.findOne({ _id: new ObjectId(movieId) });
+          movie = await moviesCollection.findOne({
+            _id: new ObjectId(movieId),
+          });
         } else {
           movie = await moviesCollection.findOne({ _id: movieId });
         }
@@ -181,7 +191,9 @@ async function run() {
           insertedId: result.insertedId,
         });
       } catch (err) {
-        res.status(500).send({ message: "Error adding to watchlist", error: err });
+        res
+          .status(500)
+          .send({ message: "Error adding to watchlist", error: err });
       }
     });
 
@@ -192,7 +204,9 @@ async function run() {
           .toArray();
         res.send(result);
       } catch (err) {
-        res.status(500).send({ message: "Error fetching watchlist", error: err });
+        res
+          .status(500)
+          .send({ message: "Error fetching watchlist", error: err });
       }
     });
 
@@ -222,7 +236,9 @@ async function run() {
           message: "❌ Removed from watchlist",
         });
       } catch (err) {
-        res.status(500).send({ message: "Error removing from watchlist", error: err });
+        res
+          .status(500)
+          .send({ message: "Error removing from watchlist", error: err });
       }
     });
 

@@ -37,39 +37,83 @@ async function run() {
     });
 
     app.get("/movies/:id", async (req, res) => {
+      const { id } = req.params;
       try {
-        const id = req.params.id;
-        const movie = await moviesCollection.findOne({ _id: new ObjectId(id) });
+        let movie;
+        if (ObjectId.isValid(id)) {
+          movie = await moviesCollection.findOne({ _id: new ObjectId(id) });
+        }
+        if (!movie) {
+          movie = await moviesCollection.findOne({ _id: id });
+        }
+        if (!movie) {
+          return res.status(404).send({ message: "Movie not found" });
+        }
         res.send(movie);
       } catch (err) {
-        res.status(500).send({ message: "Internal Server Error" });
+        res.status(500).send({ message: "Internal Server Error", error: err });
       }
     });
 
     app.post("/movies", async (req, res) => {
-      const newMovie = req.body;
-      const result = await moviesCollection.insertOne(newMovie);
-      res.send(result);
+      try {
+        const newMovie = req.body;
+        const result = await moviesCollection.insertOne(newMovie);
+        res.send({ success: true, insertedId: result.insertedId });
+      } catch (err) {
+        res.status(500).send({ message: "Error adding movie", error: err });
+      }
     });
 
     app.put("/movies/:id", async (req, res) => {
-      const id = req.params.id;
+      const { id } = req.params;
       const updated = req.body;
       try {
-        const result = await moviesCollection.updateOne(
-          { _id: new ObjectId(id) },
-          { $set: updated }
-        );
-        res.send(result);
+        let result;
+        if (ObjectId.isValid(id)) {
+          result = await moviesCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: updated }
+          );
+        } else {
+          result = await moviesCollection.updateOne(
+            { _id: id },
+            { $set: updated }
+          );
+        }
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: "Movie not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "✅ Movie updated successfully!",
+          modifiedCount: result.modifiedCount,
+        });
       } catch (err) {
         res.status(500).send({ message: "Error updating movie", error: err });
       }
     });
 
     app.delete("/movies/:id", async (req, res) => {
-      const id = req.params.id;
-      const result = await moviesCollection.deleteOne({ _id: new ObjectId(id) });
-      res.send(result);
+      const { id } = req.params;
+      try {
+        let result;
+        if (ObjectId.isValid(id)) {
+          result = await moviesCollection.deleteOne({ _id: new ObjectId(id) });
+        } else {
+          result = await moviesCollection.deleteOne({ _id: id });
+        }
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Movie not found" });
+        }
+
+        res.send({ success: true, message: "Movie deleted successfully" });
+      } catch (err) {
+        res.status(500).send({ message: "Error deleting movie", error: err });
+      }
     });
 
     app.get("/movies/filter", async (req, res) => {
@@ -99,40 +143,75 @@ async function run() {
     });
 
     app.get("/movies/user/:email", async (req, res) => {
-      const result = await moviesCollection
-        .find({ addedBy: req.params.email })
-        .toArray();
-      res.send(result);
+      try {
+        const result = await moviesCollection
+          .find({ addedBy: req.params.email })
+          .toArray();
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Error loading user movies", error: err });
+      }
     });
 
     app.post("/watchlist", async (req, res) => {
-      const { userEmail, movieId } = req.body;
-      const existing = await watchlistCollection.findOne({ userEmail, movieId });
-      if (existing)
-        return res.status(400).send({ message: "Already in watchlist" });
+      try {
+        const { userEmail, movieId } = req.body;
+        const existing = await watchlistCollection.findOne({ userEmail, movieId });
+        if (existing)
+          return res.status(400).send({ message: "Already in watchlist" });
 
-      const movie = await moviesCollection.findOne({ _id: new ObjectId(movieId) });
-      if (!movie) return res.status(404).send({ message: "Movie not found" });
+        let movie;
+        if (ObjectId.isValid(movieId)) {
+          movie = await moviesCollection.findOne({ _id: new ObjectId(movieId) });
+        } else {
+          movie = await moviesCollection.findOne({ _id: movieId });
+        }
 
-      const watchItem = { ...movie, movieId, userEmail, addedAt: new Date() };
-      const result = await watchlistCollection.insertOne(watchItem);
-      res.send(result);
+        if (!movie) return res.status(404).send({ message: "Movie not found" });
+
+        const watchItem = { ...movie, movieId, userEmail, addedAt: new Date() };
+        const result = await watchlistCollection.insertOne(watchItem);
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Error adding to watchlist", error: err });
+      }
     });
 
     app.get("/watchlist/:email", async (req, res) => {
-      const result = await watchlistCollection
-        .find({ userEmail: req.params.email })
-        .toArray();
-      res.send(result);
+      try {
+        const result = await watchlistCollection
+          .find({ userEmail: req.params.email })
+          .toArray();
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Error fetching watchlist", error: err });
+      }
     });
 
     app.delete("/watchlist/:email/:id", async (req, res) => {
       const { email, id } = req.params;
-      const result = await watchlistCollection.deleteOne({
-        userEmail: email,
-        _id: new ObjectId(id),
-      });
-      res.send(result);
+      try {
+        let result;
+        if (ObjectId.isValid(id)) {
+          result = await watchlistCollection.deleteOne({
+            userEmail: email,
+            _id: new ObjectId(id),
+          });
+        } else {
+          result = await watchlistCollection.deleteOne({
+            userEmail: email,
+            _id: id,
+          });
+        }
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Item not found in watchlist" });
+        }
+
+        res.send({ success: true, message: "Removed from watchlist" });
+      } catch (err) {
+        res.status(500).send({ message: "Error removing from watchlist", error: err });
+      }
     });
 
     app.listen(port, () => {

@@ -60,11 +60,11 @@ async function run() {
 
     app.get("/movies/filter", async (req, res) => {
       try {
-        const { genres, minRating, maxRating } = req.query;
+        const { genres, minRating, maxRating, language, country } = req.query;
         const query = {};
 
         if (genres) {
-          const genreArray = genres.split(",");
+          const genreArray = genres.split(",").map((g) => g.trim());
           query.genre = { $in: genreArray };
         }
 
@@ -73,6 +73,9 @@ async function run() {
           if (minRating) query.rating.$gte = parseFloat(minRating);
           if (maxRating) query.rating.$lte = parseFloat(maxRating);
         }
+
+        if (language) query.language = language;
+        if (country) query.country = country;
 
         const result = await moviesCollection.find(query).toArray();
         res.send(result);

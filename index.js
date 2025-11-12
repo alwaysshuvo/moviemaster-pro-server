@@ -32,14 +32,18 @@ async function run() {
     });
 
     app.get("/movies", async (req, res) => {
-      const movies = await moviesCollection.find().toArray();
-      res.send(movies);
+      try {
+        const movies = await moviesCollection.find().toArray();
+        res.send(movies);
+      } catch (err) {
+        res.status(500).send({ message: "Error loading movies", error: err });
+      }
     });
 
     app.get("/movies/:id", async (req, res) => {
       const { id } = req.params;
       try {
-        let movie;
+        let movie = null;
         if (ObjectId.isValid(id)) {
           movie = await moviesCollection.findOne({ _id: new ObjectId(id) });
         }
@@ -59,7 +63,11 @@ async function run() {
       try {
         const newMovie = req.body;
         const result = await moviesCollection.insertOne(newMovie);
-        res.send({ success: true, insertedId: result.insertedId });
+        res.send({
+          success: true,
+          message: "🎬 Movie added successfully!",
+          insertedId: result.insertedId,
+        });
       } catch (err) {
         res.status(500).send({ message: "Error adding movie", error: err });
       }
@@ -75,17 +83,16 @@ async function run() {
             { _id: new ObjectId(id) },
             { $set: updated }
           );
-        } else {
+        }
+        if (!result || result.matchedCount === 0) {
           result = await moviesCollection.updateOne(
             { _id: id },
             { $set: updated }
           );
         }
-
         if (result.matchedCount === 0) {
           return res.status(404).send({ message: "Movie not found" });
         }
-
         res.send({
           success: true,
           message: "✅ Movie updated successfully!",
@@ -102,15 +109,17 @@ async function run() {
         let result;
         if (ObjectId.isValid(id)) {
           result = await moviesCollection.deleteOne({ _id: new ObjectId(id) });
-        } else {
+        }
+        if (!result || result.deletedCount === 0) {
           result = await moviesCollection.deleteOne({ _id: id });
         }
-
         if (result.deletedCount === 0) {
           return res.status(404).send({ message: "Movie not found" });
         }
-
-        res.send({ success: true, message: "Movie deleted successfully" });
+        res.send({
+          success: true,
+          message: "🗑️ Movie deleted successfully",
+        });
       } catch (err) {
         res.status(500).send({ message: "Error deleting movie", error: err });
       }
@@ -120,21 +129,17 @@ async function run() {
       try {
         const { genres, minRating, maxRating, language, country } = req.query;
         const query = {};
-
         if (genres) {
           const genreArray = genres.split(",").map((g) => g.trim());
           query.genre = { $in: genreArray };
         }
-
         if (minRating || maxRating) {
           query.rating = {};
           if (minRating) query.rating.$gte = parseFloat(minRating);
           if (maxRating) query.rating.$lte = parseFloat(maxRating);
         }
-
         if (language) query.language = language;
         if (country) query.country = country;
-
         const result = await moviesCollection.find(query).toArray();
         res.send(result);
       } catch (err) {
@@ -149,7 +154,9 @@ async function run() {
           .toArray();
         res.send(result);
       } catch (err) {
-        res.status(500).send({ message: "Error loading user movies", error: err });
+        res
+          .status(500)
+          .send({ message: "Error loading user movies", error: err });
       }
     });
 
@@ -159,19 +166,20 @@ async function run() {
         const existing = await watchlistCollection.findOne({ userEmail, movieId });
         if (existing)
           return res.status(400).send({ message: "Already in watchlist" });
-
         let movie;
         if (ObjectId.isValid(movieId)) {
           movie = await moviesCollection.findOne({ _id: new ObjectId(movieId) });
         } else {
           movie = await moviesCollection.findOne({ _id: movieId });
         }
-
         if (!movie) return res.status(404).send({ message: "Movie not found" });
-
         const watchItem = { ...movie, movieId, userEmail, addedAt: new Date() };
         const result = await watchlistCollection.insertOne(watchItem);
-        res.send(result);
+        res.send({
+          success: true,
+          message: "❤️ Added to watchlist",
+          insertedId: result.insertedId,
+        });
       } catch (err) {
         res.status(500).send({ message: "Error adding to watchlist", error: err });
       }
@@ -197,18 +205,22 @@ async function run() {
             userEmail: email,
             _id: new ObjectId(id),
           });
-        } else {
+        }
+        if (!result || result.deletedCount === 0) {
           result = await watchlistCollection.deleteOne({
             userEmail: email,
             _id: id,
           });
         }
-
         if (result.deletedCount === 0) {
-          return res.status(404).send({ message: "Item not found in watchlist" });
+          return res.status(404).send({
+            message: "Item not found in watchlist",
+          });
         }
-
-        res.send({ success: true, message: "Removed from watchlist" });
+        res.send({
+          success: true,
+          message: "❌ Removed from watchlist",
+        });
       } catch (err) {
         res.status(500).send({ message: "Error removing from watchlist", error: err });
       }

@@ -7,7 +7,6 @@ dotenv.config();
 
 console.log("Mongo URI:", process.env.MONGODB_URI);
 
-
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -68,7 +67,7 @@ async function run() {
         const result = await moviesCollection.insertOne(newMovie);
         res.send({
           success: true,
-          message: "🎬 Movie added successfully!",
+          message: " Movie added successfully!",
           insertedId: result.insertedId,
         });
       } catch (err) {

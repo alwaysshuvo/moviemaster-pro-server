@@ -42,7 +42,7 @@ async function run() {
     const watchlistCollection = db.collection("watchlist");
 
     app.get("/", (req, res) => {
-      res.send("🎬 MovieMaster Pro Server is Running!");
+      res.send(" MovieMaster Pro Server is Running!");
     });
 
     app.get("/movies", async (req, res) => {

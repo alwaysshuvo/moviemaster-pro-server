@@ -7,12 +7,15 @@ dotenv.config();
 
 const app = express();
 
-/* ✅ CORS */
+/* =======================
+   CORS CONFIG
+======================= */
 app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://movie-matrix10.netlify.app"
+      "https://movie-matrix10.netlify.app",
+      "https://moviemaster-pro.vercel.app"
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
   })
@@ -20,7 +23,9 @@ app.use(
 
 app.use(express.json());
 
-/* ✅ MongoDB */
+/* =======================
+   MongoDB SETUP
+======================= */
 const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri, {
   serverApi: {
@@ -33,7 +38,6 @@ const client = new MongoClient(uri, {
 let moviesCollection;
 let watchlistCollection;
 
-/* ✅ Mongo connect once */
 async function connectDB() {
   if (!moviesCollection) {
     await client.connect();
@@ -45,24 +49,31 @@ async function connectDB() {
 }
 connectDB();
 
-/* ✅ Routes */
+/* =======================
+   ROUTES
+======================= */
+
 app.get("/", (req, res) => {
   res.send("🎬 MovieMaster Pro Server is Running!");
 });
 
+/* ---------- MOVIES ---------- */
+
+// Get all movies
 app.get("/movies", async (req, res) => {
   try {
     const movies = await moviesCollection.find().toArray();
     res.send(movies);
-  } catch (err) {
-    res.status(500).send({ message: "Error loading movies" });
+  } catch {
+    res.status(500).send({ message: "Failed to fetch movies" });
   }
 });
 
+// Get single movie
 app.get("/movies/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    let movie = ObjectId.isValid(id)
+    const movie = ObjectId.isValid(id)
       ? await moviesCollection.findOne({ _id: new ObjectId(id) })
       : await moviesCollection.findOne({ _id: id });
 
@@ -73,11 +84,18 @@ app.get("/movies/:id", async (req, res) => {
   }
 });
 
+// Add movie
 app.post("/movies", async (req, res) => {
-  const result = await moviesCollection.insertOne(req.body);
-  res.send({ success: true, insertedId: result.insertedId });
+  try {
+    const movie = req.body;
+    const result = await moviesCollection.insertOne(movie);
+    res.send({ success: true, insertedId: result.insertedId });
+  } catch {
+    res.status(500).send({ message: "Failed to add movie" });
+  }
 });
 
+// Update movie
 app.put("/movies/:id", async (req, res) => {
   const { id } = req.params;
   const updated = req.body;
@@ -95,8 +113,10 @@ app.put("/movies/:id", async (req, res) => {
   res.send({ success: true });
 });
 
+// Delete movie
 app.delete("/movies/:id", async (req, res) => {
   const { id } = req.params;
+
   const filter = ObjectId.isValid(id)
     ? { _id: new ObjectId(id) }
     : { _id: id };
@@ -109,5 +129,82 @@ app.delete("/movies/:id", async (req, res) => {
   res.send({ success: true });
 });
 
+/* ---------- MY COLLECTION (USER BASED) ---------- */
+// GET /my-collection?email=user@email.com
+app.get("/my-collection", async (req, res) => {
+  try {
+    const email = req.query.email;
+    if (!email) {
+      return res.status(400).send({ message: "Email is required" });
+    }
 
+    const movies = await moviesCollection
+      .find({ userEmail: email })
+      .toArray();
+
+    res.send(movies);
+  } catch {
+    res.status(500).send({ message: "Failed to fetch my collection" });
+  }
+});
+
+/* ---------- WATCHLIST ---------- */
+
+// Add to watchlist
+app.post("/watchlist", async (req, res) => {
+  try {
+    const item = req.body;
+    const exists = await watchlistCollection.findOne({
+      movieId: item.movieId,
+      userEmail: item.userEmail,
+    });
+
+    if (exists) {
+      return res.status(409).send({ message: "Already in watchlist" });
+    }
+
+    const result = await watchlistCollection.insertOne(item);
+    res.send({ success: true, insertedId: result.insertedId });
+  } catch {
+    res.status(500).send({ message: "Failed to add to watchlist" });
+  }
+});
+
+// Get watchlist
+app.get("/watchlist", async (req, res) => {
+  try {
+    const email = req.query.email;
+    if (!email) {
+      return res.status(400).send({ message: "Email is required" });
+    }
+
+    const list = await watchlistCollection
+      .find({ userEmail: email })
+      .toArray();
+
+    res.send(list);
+  } catch {
+    res.status(500).send({ message: "Failed to fetch watchlist" });
+  }
+});
+
+// Remove from watchlist
+app.delete("/watchlist/:id", async (req, res) => {
+  const { id } = req.params;
+
+  const filter = ObjectId.isValid(id)
+    ? { _id: new ObjectId(id) }
+    : { _id: id };
+
+  const result = await watchlistCollection.deleteOne(filter);
+
+  if (!result.deletedCount)
+    return res.status(404).send({ message: "Item not found" });
+
+  res.send({ success: true });
+});
+
+/* =======================
+   EXPORT (Vercel)
+======================= */
 export default app;

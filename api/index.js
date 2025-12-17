@@ -35,13 +35,14 @@ async function connectDB() {
   }
 }
 
-/* ================= Routes ================= */
-
+/* ================= ROOT ================= */
 app.get("/", (req, res) => {
   res.send("🎬 MovieMaster Pro Server is Running");
 });
 
-/* -------- All Movies -------- */
+/* ================= MOVIES ================= */
+
+/* ✅ All Movies */
 app.get("/movies", async (req, res) => {
   try {
     await connectDB();
@@ -52,7 +53,7 @@ app.get("/movies", async (req, res) => {
   }
 });
 
-/* -------- Movie Details -------- */
+/* ✅ Movie Details */
 app.get("/movies/:id", async (req, res) => {
   try {
     await connectDB();
@@ -62,25 +63,52 @@ app.get("/movies/:id", async (req, res) => {
       _id: ObjectId.isValid(id) ? new ObjectId(id) : id,
     });
 
-    if (!movie) return res.status(404).send({ message: "Movie not found" });
+    if (!movie) {
+      return res.status(404).send({ message: "Movie not found" });
+    }
+
     res.send(movie);
   } catch {
     res.status(500).send({ message: "Server error" });
   }
 });
 
-/* -------- Add Movie -------- */
+/* ✅ Add Movie */
 app.post("/movies", async (req, res) => {
   try {
     await connectDB();
-    const result = await moviesCollection.insertOne(req.body);
+
+    const movie = {
+      ...req.body,
+      createdAt: new Date(),
+    };
+
+    const result = await moviesCollection.insertOne(movie);
     res.send({ success: true, insertedId: result.insertedId });
   } catch {
     res.status(500).send({ message: "Failed to add movie" });
   }
 });
 
-/* -------- My Collection -------- */
+/* ✅ Delete Movie */
+app.delete("/movies/:id", async (req, res) => {
+  try {
+    await connectDB();
+    const { id } = req.params;
+
+    await moviesCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+
+    res.send({ success: true });
+  } catch {
+    res.status(500).send({ message: "Failed to delete movie" });
+  }
+});
+
+/* ================= MY COLLECTION ================= */
+/* 🔥 FIXED: addedBy field use করা হচ্ছে */
+
 app.get("/my-collection", async (req, res) => {
   try {
     await connectDB();
@@ -91,27 +119,47 @@ app.get("/my-collection", async (req, res) => {
     }
 
     const movies = await moviesCollection
-      .find({ userEmail: email })
+      .find({ addedBy: email })
       .toArray();
 
     res.send(movies);
-  } catch (err) {
-    console.error(err);
+  } catch {
     res.status(500).send({ message: "Failed to fetch my collection" });
   }
 });
 
-/* -------- Watchlist -------- */
+/* ================= WATCHLIST ================= */
+
+/* ✅ Add to Watchlist */
 app.post("/watchlist", async (req, res) => {
   try {
     await connectDB();
-    const result = await watchlistCollection.insertOne(req.body);
+
+    const { userEmail, movieId } = req.body;
+
+    const exists = await watchlistCollection.findOne({
+      userEmail,
+      movieId,
+    });
+
+    if (exists) {
+      return res.send({ success: true, message: "Already added" });
+    }
+
+    const item = {
+      userEmail,
+      movieId,
+      createdAt: new Date(),
+    };
+
+    const result = await watchlistCollection.insertOne(item);
     res.send({ success: true, insertedId: result.insertedId });
   } catch {
     res.status(500).send({ message: "Failed to add watchlist" });
   }
 });
 
+/* ✅ Get Watchlist (by email) */
 app.get("/watchlist", async (req, res) => {
   try {
     await connectDB();
@@ -127,17 +175,19 @@ app.get("/watchlist", async (req, res) => {
   }
 });
 
-/* -------- Remove from Watchlist -------- */
+/* ✅ Remove from Watchlist */
 app.delete("/watchlist/:id", async (req, res) => {
   try {
     await connectDB();
     await watchlistCollection.deleteOne({
       _id: new ObjectId(req.params.id),
     });
+
     res.send({ success: true });
   } catch {
-    res.status(500).send({ message: "Failed to delete watchlist item" });
+    res.status(500).send({ message: "Failed to remove watchlist item" });
   }
 });
 
+/* ================= EXPORT ================= */
 export default app;

@@ -47,7 +47,7 @@ app.get("/movies", async (req, res) => {
     await connectDB();
     const movies = await moviesCollection.find().toArray();
     res.send(movies);
-  } catch (err) {
+  } catch {
     res.status(500).send({ message: "Failed to fetch movies" });
   }
 });
@@ -57,9 +57,11 @@ app.get("/movies/:id", async (req, res) => {
   try {
     await connectDB();
     const { id } = req.params;
+
     const movie = await moviesCollection.findOne({
       _id: ObjectId.isValid(id) ? new ObjectId(id) : id,
     });
+
     if (!movie) return res.status(404).send({ message: "Movie not found" });
     res.send(movie);
   } catch {
@@ -78,7 +80,7 @@ app.post("/movies", async (req, res) => {
   }
 });
 
-/* -------- My Collection (🔥 FIXED) -------- */
+/* -------- My Collection -------- */
 app.get("/my-collection", async (req, res) => {
   try {
     await connectDB();
@@ -114,12 +116,27 @@ app.get("/watchlist", async (req, res) => {
   try {
     await connectDB();
     const email = req.query.email;
+
     const list = await watchlistCollection
       .find({ userEmail: email })
       .toArray();
+
     res.send(list);
   } catch {
     res.status(500).send({ message: "Failed to fetch watchlist" });
+  }
+});
+
+/* -------- Remove from Watchlist -------- */
+app.delete("/watchlist/:id", async (req, res) => {
+  try {
+    await connectDB();
+    await watchlistCollection.deleteOne({
+      _id: new ObjectId(req.params.id),
+    });
+    res.send({ success: true });
+  } catch {
+    res.status(500).send({ message: "Failed to delete watchlist item" });
   }
 });
 

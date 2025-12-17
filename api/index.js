@@ -1,39 +1,26 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { MongoClient, ServerApiVersion, ObjectId } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 
 dotenv.config();
 
 const app = express();
 
-/* =======================
-   CORS CONFIG
-======================= */
+/* ================= CORS ================= */
 app.use(
   cors({
     origin: [
       "http://localhost:5173",
       "https://movie-matrix10.netlify.app",
-      "https://moviemaster-pro.vercel.app"
     ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
   })
 );
 
 app.use(express.json());
 
-/* =======================
-   MongoDB SETUP
-======================= */
-const uri = process.env.MONGODB_URI;
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
-});
+/* ================= MongoDB ================= */
+const client = new MongoClient(process.env.MONGODB_URI);
 
 let moviesCollection;
 let watchlistCollection;
@@ -47,36 +34,32 @@ async function connectDB() {
     console.log("✅ MongoDB connected");
   }
 }
-connectDB();
 
-/* =======================
-   ROUTES
-======================= */
+/* ================= Routes ================= */
 
 app.get("/", (req, res) => {
-  res.send("🎬 MovieMaster Pro Server is Running!");
+  res.send("🎬 MovieMaster Pro Server is Running");
 });
 
-/* ---------- MOVIES ---------- */
-
-// Get all movies
+/* -------- All Movies -------- */
 app.get("/movies", async (req, res) => {
   try {
+    await connectDB();
     const movies = await moviesCollection.find().toArray();
     res.send(movies);
-  } catch {
+  } catch (err) {
     res.status(500).send({ message: "Failed to fetch movies" });
   }
 });
 
-// Get single movie
+/* -------- Movie Details -------- */
 app.get("/movies/:id", async (req, res) => {
   try {
+    await connectDB();
     const { id } = req.params;
-    const movie = ObjectId.isValid(id)
-      ? await moviesCollection.findOne({ _id: new ObjectId(id) })
-      : await moviesCollection.findOne({ _id: id });
-
+    const movie = await moviesCollection.findOne({
+      _id: ObjectId.isValid(id) ? new ObjectId(id) : id,
+    });
     if (!movie) return res.status(404).send({ message: "Movie not found" });
     res.send(movie);
   } catch {
@@ -84,56 +67,23 @@ app.get("/movies/:id", async (req, res) => {
   }
 });
 
-// Add movie
+/* -------- Add Movie -------- */
 app.post("/movies", async (req, res) => {
   try {
-    const movie = req.body;
-    const result = await moviesCollection.insertOne(movie);
+    await connectDB();
+    const result = await moviesCollection.insertOne(req.body);
     res.send({ success: true, insertedId: result.insertedId });
   } catch {
     res.status(500).send({ message: "Failed to add movie" });
   }
 });
 
-// Update movie
-app.put("/movies/:id", async (req, res) => {
-  const { id } = req.params;
-  const updated = req.body;
-  delete updated._id;
-
-  const filter = ObjectId.isValid(id)
-    ? { _id: new ObjectId(id) }
-    : { _id: id };
-
-  const result = await moviesCollection.updateOne(filter, { $set: updated });
-
-  if (!result.matchedCount)
-    return res.status(404).send({ message: "Movie not found" });
-
-  res.send({ success: true });
-});
-
-// Delete movie
-app.delete("/movies/:id", async (req, res) => {
-  const { id } = req.params;
-
-  const filter = ObjectId.isValid(id)
-    ? { _id: new ObjectId(id) }
-    : { _id: id };
-
-  const result = await moviesCollection.deleteOne(filter);
-
-  if (!result.deletedCount)
-    return res.status(404).send({ message: "Movie not found" });
-
-  res.send({ success: true });
-});
-
-/* ---------- MY COLLECTION (USER BASED) ---------- */
-// GET /my-collection?email=user@email.com
+/* -------- My Collection (🔥 FIXED) -------- */
 app.get("/my-collection", async (req, res) => {
   try {
+    await connectDB();
     const email = req.query.email;
+
     if (!email) {
       return res.status(400).send({ message: "Email is required" });
     }
@@ -143,68 +93,34 @@ app.get("/my-collection", async (req, res) => {
       .toArray();
 
     res.send(movies);
-  } catch {
+  } catch (err) {
+    console.error(err);
     res.status(500).send({ message: "Failed to fetch my collection" });
   }
 });
 
-/* ---------- WATCHLIST ---------- */
-
-// Add to watchlist
+/* -------- Watchlist -------- */
 app.post("/watchlist", async (req, res) => {
   try {
-    const item = req.body;
-    const exists = await watchlistCollection.findOne({
-      movieId: item.movieId,
-      userEmail: item.userEmail,
-    });
-
-    if (exists) {
-      return res.status(409).send({ message: "Already in watchlist" });
-    }
-
-    const result = await watchlistCollection.insertOne(item);
+    await connectDB();
+    const result = await watchlistCollection.insertOne(req.body);
     res.send({ success: true, insertedId: result.insertedId });
   } catch {
-    res.status(500).send({ message: "Failed to add to watchlist" });
+    res.status(500).send({ message: "Failed to add watchlist" });
   }
 });
 
-// Get watchlist
 app.get("/watchlist", async (req, res) => {
   try {
+    await connectDB();
     const email = req.query.email;
-    if (!email) {
-      return res.status(400).send({ message: "Email is required" });
-    }
-
     const list = await watchlistCollection
       .find({ userEmail: email })
       .toArray();
-
     res.send(list);
   } catch {
     res.status(500).send({ message: "Failed to fetch watchlist" });
   }
 });
 
-// Remove from watchlist
-app.delete("/watchlist/:id", async (req, res) => {
-  const { id } = req.params;
-
-  const filter = ObjectId.isValid(id)
-    ? { _id: new ObjectId(id) }
-    : { _id: id };
-
-  const result = await watchlistCollection.deleteOne(filter);
-
-  if (!result.deletedCount)
-    return res.status(404).send({ message: "Item not found" });
-
-  res.send({ success: true });
-});
-
-/* =======================
-   EXPORT (Vercel)
-======================= */
 export default app;

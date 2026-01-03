@@ -46,12 +46,42 @@ app.get("/", (req, res) => {
 app.get("/movies", async (req, res) => {
   try {
     await connectDB();
-    const movies = await moviesCollection.find().toArray();
+
+    const {
+      search = "",
+      genre = "",
+      minRating = 0,
+      maxRating = 10,
+      sort = "latest",
+    } = req.query;
+
+    const query = {
+      rating: { $gte: Number(minRating), $lte: Number(maxRating) },
+    };
+
+    if (search) {
+      query.title = { $regex: search, $options: "i" };
+    }
+
+    if (genre) {
+      query.genre = genre;
+    }
+
+    let sortOption = { createdAt: -1 };
+    if (sort === "rating") sortOption = { rating: -1 };
+    if (sort === "title") sortOption = { title: 1 };
+
+    const movies = await moviesCollection
+      .find(query)
+      .sort(sortOption)
+      .toArray();
+
     res.send(movies);
-  } catch {
+  } catch (err) {
     res.status(500).send({ message: "Failed to fetch movies" });
   }
 });
+
 
 /* ✅ Movie Details */
 app.get("/movies/:id", async (req, res) => {
@@ -107,7 +137,6 @@ app.delete("/movies/:id", async (req, res) => {
 });
 
 /* ================= MY COLLECTION ================= */
-/* 🔥 FIXED: addedBy field use করা হচ্ছে */
 
 app.get("/my-collection", async (req, res) => {
   try {
@@ -191,3 +220,9 @@ app.delete("/watchlist/:id", async (req, res) => {
 
 /* ================= EXPORT ================= */
 export default app;
+
+const port = process.env.PORT || 5000;
+
+app.listen(port, () => {
+  console.log(`🚀 MovieMaster Pro Server running on port ${port}`);
+});
